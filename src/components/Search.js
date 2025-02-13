@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { mockSearchResults } from "../constants/mock";
+import { XIcon, SearchIcon } from "@heroicons/react/solid";
 
 const Search = () => {
     const [input, setInput] = useState("");
@@ -27,7 +28,17 @@ const Search = () => {
           }
         }}
       />
+
+      {input && (
+        <button onClick={clear}>
+        <XIcon className="h-4 w-4 fill-gray-500" />
+      </button>
+      )}
+
+      <button onClick={updateBestMatches} className="h-8 w-8 bg-indigo-600 rounded-md flex justify-center item-center m-1 p-2">
+        <SearchIcon />
+      </button>
     </div>;
 };
 
-export default Search;
+export default Search; 
