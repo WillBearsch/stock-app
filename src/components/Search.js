@@ -1,44 +1,46 @@
-import React, { useState } from "react";
-import { mockSearchResults } from "../constants/mock";
-import { XIcon, SearchIcon } from "@heroicons/react/solid";
+import React from "react";
 
-const Search = () => {
-    const [input, setInput] = useState("");
-    const [bestMatches, setBestMatches] = useState(mockSearchResults.result);
-
-    const clear = () => {
-        setInput("");
-        setBestMatches([]);
-    };
-
-    const updateBestMatches = () => {
-        setBestMatches(mockSearchResults)
-    }
-
-    return <div className = "flex items-center my-4 border-2 rounded-md relative z-50 w-96 bg-white border-neutral-200">
-        <input
+const Search = ({
+  query,
+  setQuery,
+  results,
+  onSelect,
+  loading = false,
+  placeholder = "Search ticker or company",
+}) => {
+  return (
+    <div className="search-wrap">
+      <input
+        className="search-input"
         type="text"
-        value={input}
-        className="w-full px-4 py-2 focus:outline-none rounded-md"
-        placeholder="Search stock..."
-        onChange={(event) => setInput(event.target.value)}
-        onKeyPress={(event) => {
-          if (event.key === "Enter") {
-            updateBestMatches();
-          }
-        }}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={placeholder}
+        aria-label="Search stocks"
       />
-
-      {input && (
-        <button onClick={clear}>
-        <XIcon className="h-4 w-4 fill-gray-500" />
+      <button className="search-button" type="button" aria-hidden>
+        /
       </button>
+      {query.trim().length > 0 && (
+        <ul className="search-results" role="listbox" aria-label="Search results">
+          {loading && <li className="muted">Searching...</li>}
+          {!loading && results.length === 0 && <li className="muted">No matches</li>}
+          {results.map((item) => (
+            <li key={`${item.symbol}-${item.description}`}>
+              <button
+                type="button"
+                className="result-item"
+                onClick={() => onSelect(item)}
+              >
+                <strong>{item.symbol}</strong>
+                <div className="muted">{item.description}</div>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-
-      <button onClick={updateBestMatches} className="h-8 w-8 bg-indigo-600 rounded-md flex justify-center item-center m-1 p-2">
-        <SearchIcon />
-      </button>
-    </div>;
+    </div>
+  );
 };
 
-export default Search; 
+export default React.memo(Search);

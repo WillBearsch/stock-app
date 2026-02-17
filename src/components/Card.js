@@ -1,11 +1,11 @@
 import React from "react";
 
-const Card = ({ children }) => {
+const Card = ({ children, className = "" }) => {
   return (
-    <div className="w-full h-full rounded-md relative p-8 border-2 bg-gray-300">
+    <div className={`panel ${className}`}>
       {children}
     </div>
   );
 };
 
-export default Card;
+export default React.memo(Card);

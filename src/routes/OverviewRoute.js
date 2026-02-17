@@ -1,16 +1,9 @@
-import React, { useMemo } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import Header from "./Header";
-import Card from "./Card";
-import useStockData from "../hooks/useStockData";
+import React, { Suspense, lazy, useMemo } from "react";
+import Card from "../components/Card";
+import Header from "../components/Header";
+import { SkeletonBlock } from "../components/Skeleton";
+
+const LazyPriceChart = lazy(() => import("../components/PriceChart"));
 
 const ranges = ["1D", "1W", "1M", "3M", "1Y"];
 
@@ -21,7 +14,7 @@ const toCurrency = (value) =>
     maximumFractionDigits: 2,
   });
 
-const Dashboard = () => {
+const OverviewRoute = ({ market }) => {
   const {
     symbol,
     range,
@@ -38,12 +31,8 @@ const Dashboard = () => {
     loading,
     error,
     selectSymbol,
-  } = useStockData();
-
-  const dailyLow = quote?.l;
-  const dailyHigh = quote?.h;
-  const open = quote?.o;
-  const prevClose = quote?.pc;
+    toggleWatchlist,
+  } = market;
 
   const marketCap = useMemo(() => {
     const cap = Number(profile?.marketCapitalization || 0);
@@ -61,13 +50,13 @@ const Dashboard = () => {
         searchResults={searchResults}
         searchLoading={searchLoading}
         onSelectSearchResult={(item) => selectSymbol(item.symbol)}
+        onToggleWatchlist={() => toggleWatchlist(profile?.ticker || symbol)}
+        inWatchlist={watchlist.includes(profile?.ticker || symbol)}
       />
 
       <Card className="chart">
         <div className="title-row">
-          <h2 className="name" style={{ fontSize: "1.05rem", margin: 0 }}>
-            {symbol} trend
-          </h2>
+          <h2 className="name section-name">{symbol} trend</h2>
           <div className="muted">Near-real-time updates every 15s</div>
         </div>
         <div className="range-row">
@@ -83,62 +72,21 @@ const Dashboard = () => {
           ))}
         </div>
         {loading ? (
-          <div className="loading">Loading chart...</div>
+          <SkeletonBlock className="skeleton-chart" />
         ) : (
-          <div className="chart-anim">
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="closeArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1565d8" stopOpacity={0.32} />
-                    <stop offset="95%" stopColor="#1565d8" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(16, 33, 59, 0.12)" />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={24}
-                  tick={{ fill: "#5d6e8c", fontSize: 12 }}
-                />
-                <YAxis
-                  tickFormatter={(v) => `$${v.toFixed(0)}`}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: "#5d6e8c", fontSize: 12 }}
-                  width={64}
-                  domain={["dataMin - 2", "dataMax + 2"]}
-                />
-                <Tooltip
-                  contentStyle={{
-                    border: "1px solid rgba(16, 33, 59, 0.12)",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(255,255,255,0.94)",
-                  }}
-                  formatter={(value) => [toCurrency(value), "Close"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="close"
-                  stroke="#1565d8"
-                  strokeWidth={2}
-                  fill="url(#closeArea)"
-                  isAnimationActive
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <Suspense fallback={<SkeletonBlock className="skeleton-chart" />}>
+            <LazyPriceChart chartData={chartData} />
+          </Suspense>
         )}
       </Card>
 
       <Card className="watch">
         <div className="watch-header">
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Watchlist</h3>
+          <h3 className="section-name">Watchlist</h3>
           <span className="muted">{watchlist.length} symbols</span>
         </div>
         <ul className="watch-list">
-          {watchlist.map((item) => {
+          {watchlist.slice(0, 10).map((item) => {
             const wQuote = watchlistQuotes[item];
             const price = Number(wQuote?.c ?? 0);
             const diff = Number(wQuote?.c ?? 0) - Number(wQuote?.pc ?? 0);
@@ -148,6 +96,13 @@ const Dashboard = () => {
                   <strong>{item}</strong>
                 </button>
                 <span>{price ? toCurrency(price) : "-"}</span>
+                <button
+                  className={`micro-btn ${watchlist.includes(item) ? "active" : ""}`}
+                  type="button"
+                  onClick={() => toggleWatchlist(item)}
+                >
+                  {watchlist.includes(item) ? "Remove" : "Add"}
+                </button>
                 <span className={`mini-change ${diff >= 0 ? "delta up" : "delta down"}`}>
                   {diff >= 0 ? "+" : ""}
                   {diff.toFixed(2)}
@@ -160,25 +115,25 @@ const Dashboard = () => {
 
       <Card className="side">
         <div className="side-header">
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Snapshot</h3>
+          <h3 className="section-name">Snapshot</h3>
           <span className="muted">{profile?.country || "US"}</span>
         </div>
         <div className="meta-grid">
           <div className="metric">
             <p className="metric-label">Open</p>
-            <p className="metric-value">{toCurrency(open)}</p>
+            <p className="metric-value">{toCurrency(quote?.o)}</p>
           </div>
           <div className="metric">
             <p className="metric-label">Prev Close</p>
-            <p className="metric-value">{toCurrency(prevClose)}</p>
+            <p className="metric-value">{toCurrency(quote?.pc)}</p>
           </div>
           <div className="metric">
             <p className="metric-label">Day High</p>
-            <p className="metric-value">{toCurrency(dailyHigh)}</p>
+            <p className="metric-value">{toCurrency(quote?.h)}</p>
           </div>
           <div className="metric">
             <p className="metric-label">Day Low</p>
-            <p className="metric-value">{toCurrency(dailyLow)}</p>
+            <p className="metric-value">{toCurrency(quote?.l)}</p>
           </div>
           <div className="metric">
             <p className="metric-label">Market Cap</p>
@@ -211,4 +166,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default React.memo(OverviewRoute);
