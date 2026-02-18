@@ -5,7 +5,7 @@ import { SkeletonBlock } from "../components/Skeleton";
 
 const LazyPriceChart = lazy(() => import("../components/PriceChart"));
 
-const ranges = ["1D", "1W", "1M", "3M", "1Y"];
+const ranges = ["1D", "1W", "1M", "1Y"];
 
 const toCurrency = (value) =>
   Number(value || 0).toLocaleString(undefined, {
@@ -75,7 +75,7 @@ const OverviewRoute = ({ market }) => {
           <SkeletonBlock className="skeleton-chart" />
         ) : (
           <Suspense fallback={<SkeletonBlock className="skeleton-chart" />}>
-            <LazyPriceChart chartData={chartData} />
+            <LazyPriceChart key={`${symbol}-${range}`} chartData={chartData} />
           </Suspense>
         )}
       </Card>

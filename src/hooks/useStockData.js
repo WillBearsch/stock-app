@@ -48,19 +48,28 @@ const useStockData = () => {
   }, [watchlist]);
 
   const refreshPrimaryData = useCallback(async () => {
-    setLoading(true);
     setError("");
     try {
-      const [profileData, quoteData, candleData] = await Promise.all([
+      const [profileData, quoteData] = await Promise.all([
         getCompanyProfile(symbol),
         getQuote(symbol),
-        getCandles(symbol, range),
       ]);
       setProfile(profileData);
       setQuote(quoteData);
-      setCandles(candleData);
+      setWatchlistQuotes((prev) => ({ ...prev, [symbol]: quoteData }));
     } catch (_err) {
       setError("Unable to fetch market data right now.");
+    }
+  }, [symbol]);
+
+  const refreshCandles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const candleData = await getCandles(symbol, range);
+      setCandles(candleData);
+    } catch (_err) {
+      setCandles(null);
+      setError("Unable to fetch historical close prices right now.");
     } finally {
       setLoading(false);
     }
@@ -70,28 +79,52 @@ const useStockData = () => {
     try {
       const quoteData = await getQuote(symbol);
       setQuote(quoteData);
+      setWatchlistQuotes((prev) => ({ ...prev, [symbol]: quoteData }));
     } catch (_err) {
       setError("Quote refresh failed.");
     }
   }, [symbol]);
 
   const refreshWatchlist = useCallback(async () => {
-    try {
-      const entries = await Promise.all(
-        watchlist.map(async (item) => {
-          const nextQuote = await getQuote(item);
-          return [item, nextQuote];
-        })
-      );
-      setWatchlistQuotes(Object.fromEntries(entries));
-    } catch (_err) {
-      setError("Watchlist refresh failed.");
+    const symbols = [...new Set(watchlist)];
+    const results = await Promise.allSettled(
+      symbols.map(async (item) => {
+        const nextQuote = await getQuote(item);
+        return [item, nextQuote];
+      })
+    );
+
+    setWatchlistQuotes((prev) => {
+      const next = {};
+
+      for (const symbolItem of symbols) {
+        if (prev[symbolItem]) {
+          next[symbolItem] = prev[symbolItem];
+        }
+      }
+
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
+          const [item, nextQuote] = result.value;
+          next[item] = nextQuote;
+        }
+      });
+
+      return next;
+    });
+
+    if (results.some((result) => result.status === "rejected")) {
+      setError("Some watchlist quotes could not be refreshed.");
     }
   }, [watchlist]);
 
   useEffect(() => {
     refreshPrimaryData();
   }, [refreshPrimaryData]);
+
+  useEffect(() => {
+    refreshCandles();
+  }, [refreshCandles]);
 
   useEffect(() => {
     refreshWatchlist();
@@ -140,14 +173,20 @@ const useStockData = () => {
       return [];
     }
 
-    return candles.c.map((close, index) => ({
-      close,
-      timestamp: candles.t[index] * 1000,
-      label: new Date(candles.t[index] * 1000).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      }),
-    }));
+    return candles.c
+      .map((close, index) => ({
+        close: Number(close),
+        timestamp: Number(candles.t[index]) * 1000,
+      }))
+      .filter((point) => Number.isFinite(point.close) && Number.isFinite(point.timestamp))
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map((point) => ({
+        ...point,
+        label: new Date(point.timestamp).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
+      }));
   }, [candles]);
 
   const selectSymbol = useCallback((nextSymbol) => {
@@ -174,6 +213,14 @@ const useStockData = () => {
         }
         return [normalizedSymbol, ...prev].slice(0, 300);
       });
+
+      if (wasIncluded) {
+        setWatchlistQuotes((prev) => {
+          const next = { ...prev };
+          delete next[normalizedSymbol];
+          return next;
+        });
+      }
 
       // Optimistic UI update first, then hydrate quote in the background.
       if (!wasIncluded) {
